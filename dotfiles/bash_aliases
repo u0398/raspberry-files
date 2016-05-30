@@ -11,7 +11,7 @@ fi
 
 alias ll='ls -alF'
 alias la='ls -A'
-alias lla='ls -A'
+alias lla='ll -A'
 alias l='ls -CF'
 
 alias x='exit'
