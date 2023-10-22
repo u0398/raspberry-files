@@ -51,17 +51,17 @@ STATS_FIELD = 12
 
 
 # oled timer at startup
-ACTION_INITIAL_TIMEOUT = 2
+ACTION_INITIAL_TIMEOUT = 10
 # oled timer between button actions
-ACTION_TIMEOUT = 5
+ACTION_TIMEOUT = 20
 # time considered a long press
 ACTION_PRESS = timedelta(seconds=2)
 # the countdown timer after a button press
 action_time = ACTION_INITIAL_TIMEOUT
 
 # Countdown before executing a reboot/shutdown
-REBOOT_COUNTDOWN = 10
-SHUTDOWN_COUNTDOWN = 10
+REBOOT_COUNTDOWN = 6
+SHUTDOWN_COUNTDOWN = 6
 
 # Subset of oled_display states treated as cycleable menu screens
 MENU = ["INFO", "REBOOT", "SHUTDOWN"]
