@@ -58,6 +58,7 @@ ACTION_TIMEOUT = 20
 ACTION_PRESS = timedelta(seconds=2)
 # the countdown timer after a button press
 action_time = ACTION_INITIAL_TIMEOUT
+action_cancel = False
 
 # Countdown before executing a reboot/shutdown
 REBOOT_COUNTDOWN = 6
@@ -141,12 +142,14 @@ def oled_display(state="", count=0):
         draw.text((0, top+24),   "     to execute.    ", font=font, fill=255)
     if state == "REBOOTING":
         draw.text((0, top),      " Rebooting...     "+str(count), font=font, fill=255)
+        draw.text((0, top+24),   " (press to cancle)  ", font=font, fill=255)
     if state == "SHUTDOWN":
         draw.text((0, top),      "     SHUTDOWN?      ", font=font, fill=255)
         draw.text((0, top+12),   "   Press and hold   ", font=font, fill=255)
         draw.text((0, top+24),   "     to execute.    ", font=font, fill=255)
     if state == "SHUTTING_DOWN":
         draw.text((0, top),      " Shutting Down... "+str(count), font=font, fill=255)
+        draw.text((0, top+24),   " (press to cancel)  ", font=font, fill=255)
     oled.image(image)
     oled.show()
 
@@ -159,6 +162,7 @@ led.value = led_resting
 
 # Main loop
 while True:
+
     # The button has been recently pressed
     if action_time > 0:
         time.sleep(0.1)
@@ -206,33 +210,50 @@ while True:
         logging.debug("press_delta = %s", press_delta)
 
         # If the button was held down long enough, interupt the menu 
-        if press_delta > ACTION_PRESS:
+        if not action_cancel and press_delta > ACTION_PRESS:
             if MENU[menu_state] == "REBOOT":
+                time.sleep(1)
                 count = REBOOT_COUNTDOWN
                 while count > 0:
                     oled_display("REBOOTING", count)
                     count -= 1
                     time.sleep(1)
-                oled_display()
-                cmd = "sudo reboot now"
-                subprocess.Popen(cmd, shell = True)
-                exit()
+                    if button.is_pressed:
+                        action_cancel = True
+                        break
+                if action_cancel:
+                    menu_state = 0
+                else:
+                    oled_display()
+                    cmd = "sudo reboot now"
+                    subprocess.Popen(cmd, shell = True)
+                    exit()
             if MENU[menu_state] == "SHUTDOWN":
+                time.sleep(1)
                 count = SHUTDOWN_COUNTDOWN
                 while count > 0:
                     oled_display("SHUTTING_DOWN", count)
                     count -= 1
                     time.sleep(1)
-                oled_display()
-                cmd = "sudo shutdown now"
-                subprocess.Popen(cmd, shell = True)
-                exit()
+                    if button.is_pressed:
+                        action_cancel = True
+                        break
+                if action_cancel:
+                    menu_state = 1
+                else:
+                    oled_display()
+                    cmd = "sudo shutdown now"
+                    subprocess.Popen(cmd, shell = True)
+                    exit()
         else:
             # Flag indicating a short button press/release 
             button_clicked = True
 
     if button_clicked:
+        # Reset action cancel and click flags
+        action_cancel = False
         button_clicked = False
+        
         logging.debug("button_down = %s\n\n", button_down)
         button_up = datetime.now()
         logging.debug("button_up = %s", button_up)
