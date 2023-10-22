@@ -22,11 +22,12 @@
 # reboot/shutdown commands, and rudimentary disk i/o indication.
 #
 # Requirements: python3-pip python3-pil python3-smbus i2c-tools psutil
-# adafruit-circuitpython-ssd1306
+# tzlocal adafruit-circuitpython-ssd1306
 
 import argparse
 import logging
 import time
+import tzlocal
 from datetime import datetime
 from datetime import timedelta
 import subprocess
@@ -65,7 +66,7 @@ REBOOT_COUNTDOWN = 6
 SHUTDOWN_COUNTDOWN = 6
 
 # Subset of oled_display states treated as cycleable menu screens
-MENU = ["INFO", "REBOOT", "SHUTDOWN"]
+MENU = ["INFO", "CLOCK", "REBOOT", "SHUTDOWN"]
 menu_state = None
 
 # Tracking button events
@@ -106,7 +107,7 @@ bottom = height - padding
 
 # Load default font.
 font = ImageFont.load_default()
-font_large = ImageFont.load
+font_large = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf", 24)
 
 # anything that changes the display
 def oled_display(state="", count=0):
@@ -136,6 +137,15 @@ def oled_display(state="", count=0):
         draw.text((0, top),      "NAME: " + hostName, font=font, fill=255)
         draw.text((0, top+12),   "IP  : " + ipAddress,  font=font, fill=255)
         draw.text((0, top+24),   "CPU : " + CPU + "% | MEM: " + MemUsage + "%", font=font, fill=255)
+    if state == "CLOCK":
+        timestamp = time.strftime('%H:%M:%S')
+        timezone = tzlocal.get_localzone_name()
+        w = draw.textlength(timestamp, font_large)
+        draw.text(((width-w)/2, top),      timestamp, font=font_large, fill=255)
+        w = draw.textlength(timezone, font)
+        draw.text(((width-w)/2, top+24),   timezone, font=font, fill=255)
+    if state == "REBOOT":
+        draw.text((0, top),      "       REBOOT?      ", font=font, fill=255)
     if state == "REBOOT":
         draw.text((0, top),      "       REBOOT?      ", font=font, fill=255)
         draw.text((0, top+12),   "   Press and hold   ", font=font, fill=255)
