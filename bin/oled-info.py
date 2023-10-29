@@ -15,7 +15,7 @@
 
 # Author: Peter McDermott (ux0398@gmail.com)
 # Repository: https://github.com/u0398/raspberry-files
-# Version: 0.1
+# Version: 0.2
 #
 # Description: A script that oledlays information on a oled, button, and
 # LED attached to a Raspberry Pi. Functions include information oledlay,
@@ -30,6 +30,7 @@ import time
 import tzlocal
 from datetime import datetime
 from datetime import timedelta
+import re
 import subprocess
 import adafruit_ssd1306
 from board import SCL, SDA
@@ -39,7 +40,7 @@ import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw, ImageFont
 from gpiozero import PWMLED, Button
 
-VERSION = "0.1"
+VERSION = "0.2"
 
 led = PWMLED(23)
 button = Button(20)
@@ -47,9 +48,8 @@ button = Button(20)
 logging.basicConfig(level=logging.INFO)
 
 # I/O activity source
-STATSFILE = '/proc/diskstats'
-STATS_FIELD = 12
-
+IOFILE = '/proc/diskstats'
+IO_FIELD = 12
 
 # oled timer at startup
 ACTION_INITIAL_TIMEOUT = 10
@@ -66,7 +66,7 @@ REBOOT_COUNTDOWN = 6
 SHUTDOWN_COUNTDOWN = 6
 
 # Subset of oled_display states treated as cycleable menu screens
-MENU = ["INFO", "CLOCK", "REBOOT", "SHUTDOWN"]
+MENU = ["INFO", "INFO2", "CLOCK", "REBOOT", "SHUTDOWN"]
 menu_state = None
 
 # Tracking button events
@@ -122,7 +122,7 @@ def oled_display(state="", count=0):
     if state  == "INFO":
         # Shell scripts for system monitoring from here : https://unix.stackexchange.com/questions/119126/command-to-oledlay-memory-usage-disk-usage-and-cpu-load
         cmd = "hostname"
-        HOSTNAME =  subprocess.check_output(cmd, shell = True)
+        HOSTNAME = subprocess.check_output(cmd, shell = True)
         cmd = "hostname -I | cut -d\' \' -f1"
         IP = subprocess.check_output(cmd, shell = True )
 
@@ -137,6 +137,30 @@ def oled_display(state="", count=0):
         draw.text((0, top),      "NAME: " + hostName, font=font, fill=255)
         draw.text((0, top+12),   "IP  : " + ipAddress,  font=font, fill=255)
         draw.text((0, top+24),   "CPU : " + CPU + "% | MEM: " + MemUsage + "%", font=font, fill=255)
+    if state == "INFO2":
+        cmd = "uptime -p"
+        UPTIME_P = subprocess.check_output(cmd, shell = True)
+        upTime = format(UPTIME_P.decode('UTF-8'))
+        replace_list = {"up ": "", " days,": "d", " hours,": "h", " minutes": "m"}
+        for char in replace_list.keys():
+            upTime = re.sub(char, replace_list[char], upTime)
+        upTime = "{:>15}".format(upTime)
+
+        cmd = "uptime"
+        UPTIME = subprocess.check_output(cmd, shell = True)
+        load = format(UPTIME.decode('UTF-8'))
+        load = re.sub(r'^.*?load average:', '', load)
+        load = re.sub(",", "", load)
+        load = "{:>17}".format(load)
+
+        cmd = "uname -r"
+        KERNEL = subprocess.check_output(cmd, shell = True)
+        kernel = format(KERNEL.decode('UTF-8'))
+        kernel = "{:>20}".format(kernel)
+
+        draw.text((0, top),      "UPTIME:" + upTime, font=font, fill=255)
+        draw.text((0, top+12),   "LOAD:" + load, font=font, fill=255)
+        draw.text((0, top+24),   "K:" + kernel, font=font, fill=255)
     if state == "CLOCK":
         timestamp = time.strftime('%H:%M:%S')
         timezone = tzlocal.get_localzone_name()
@@ -144,8 +168,6 @@ def oled_display(state="", count=0):
         draw.text(((width-w)/2, top),      timestamp, font=font_large, fill=255)
         w = draw.textlength(timezone, font)
         draw.text(((width-w)/2, top+24),   timezone, font=font, fill=255)
-    if state == "REBOOT":
-        draw.text((0, top),      "       REBOOT?      ", font=font, fill=255)
     if state == "REBOOT":
         draw.text((0, top),      "       REBOOT?      ", font=font, fill=255)
         draw.text((0, top+12),   "   Press and hold   ", font=font, fill=255)
@@ -184,12 +206,12 @@ while True:
         logging.debug("action_time = %s", action_time)
     else:
         # Check if there has been I/O activity
-        s = open(STATSFILE,mode='r')
-        stats = s.read()
+        s = open(IOFILE,mode='r')
+        io = s.read()
         disk_active = False
-        for l in stats.split('\n'):
+        for l in io.split('\n'):
             try:
-                if int(l.split()[STATS_FIELD - 1]):
+                if int(l.split()[IO_FIELD - 1]):
                     disk_active = True
                     break
             except IndexError:
