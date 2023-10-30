@@ -1,4 +1,4 @@
-# Copyright (c) 2023 Peter McDermott
+# Copyright (c) 2023 u0398
 #
 # This program is free software: you can redistribute it and/or modify it
 # under the terms of the GNU General Public License as published by the Free
@@ -13,7 +13,7 @@
 # You should have received a copy of the GNU General Public License along
 # with this program. If not, see <https://www.gnu.org/licenses/>.
 
-# Author: Peter McDermott (ux0398@gmail.com)
+# Author: u0398 (ux0398@gmail.com)
 # Repository: https://github.com/u0398/raspberry-files
 # Version: 0.2
 #
@@ -40,22 +40,72 @@ import RPi.GPIO as GPIO
 from PIL import Image, ImageDraw, ImageFont
 from gpiozero import PWMLED, Button
 
-VERSION = "0.2"
 
-led = PWMLED(23)
-button = Button(20)
+parser = argparse.ArgumentParser(description='Simple python3 script to control a monochrome ssd1306 based oled, LED, and button.',
+                                 epilog='The shorter the button poll interval the more responsive the button will be, but more CPU time will be used by the script.'
+                                )
+parser.add_argument('-i', '--interval',
+                    action='store',
+                    type=float,
+                    default=0.4,
+                    help='Button poll interval in seconds. Default: 0.4'
+                   )
+parser.add_argument('-t', '--timer',
+                    action='store',
+                    type=float,
+                    default=20,
+                    help='Sleep timer for oled in seconds. Default: 20'
+                   )
+parser.add_argument('-l', '--led',
+                    action='store',
+                    type=float,
+                    default=23,
+                    help='LED GPIO pin. BCM numbering. Default: 23'
+                   )
+parser.add_argument('-b', '--button',
+                    action='store',
+                    type=float,
+                    default=20,
+                    help='Button GPIO pin. BCM numbering. Default: 20'
+                   )
+parser.add_argument('--startup',
+                    action=argparse.BooleanOptionalAction,
+                    default=True,
+                    help='Whether to display startup screen. Default: True'
+                   )
+parser.add_argument('-d', '--debug',
+                    action='store_const',
+                    const=logging.DEBUG,
+                    default=logging.WARNING,
+                    help='Enable debug output.'
+                   )
+args = parser.parse_args()
 
-logging.basicConfig(level=logging.INFO)
+VERSION = "0.3"
+
+led = PWMLED(args.led)
+button = Button(args.button)
+
+logging.basicConfig(level=args.debug)
+logging.debug(args)
 
 # I/O activity source
 IOFILE = '/proc/diskstats'
 IO_FIELD = 12
 
+# Balancing button responsiveness, and resource consumption. Defualt: 0.4s
+POLLING_INTERVAL = args.interval
+# Button responsiveness when screen is active
+ACTIVE_INTERVAL = 0.1
+
+# Whether to display startup screen. Default: True
+STARTUP_DISPLAY = args.startup
+
 # oled timer at startup
 ACTION_INITIAL_TIMEOUT = 10
 # oled timer between button actions
-ACTION_TIMEOUT = 20
-# time considered a long press
+ACTION_TIMEOUT = args.timer
+# Time considered a long press
 ACTION_PRESS = timedelta(seconds=2)
 # the countdown timer after a button press
 action_time = ACTION_INITIAL_TIMEOUT
@@ -105,8 +155,9 @@ padding = -2
 top = padding
 bottom = height - padding
 
-# Load default font.
+# Load default font
 font = ImageFont.load_default()
+# this font is included with Rasberry Pi OS
 font_large = ImageFont.truetype("/usr/share/fonts/dejavu/DejaVuSansMono-Bold.ttf", 24)
 
 # anything that changes the display
@@ -114,7 +165,7 @@ def oled_display(state="", count=0):
     # Draw a black filled box to clear the image.
     draw.rectangle((0, 0, width, height), outline=0, fill=0)
 
-    if state == "BOOTUP":
+    if state == "STARTUP":
         # Startup Info
         draw.rectangle((1,1,width-3,height-2), outline=1, fill=0)
         draw.text((6, top+6),  "Loading Info Screen", font=font, fill=255)
@@ -186,9 +237,10 @@ def oled_display(state="", count=0):
     oled.show()
 
 # Display "bootup" screen
-oled_display("BOOTUP")
-led.pulse(0.4,0.4)
-time.sleep(ACTION_INITIAL_TIMEOUT)
+if STARTUP_DISPLAY:
+    oled_display("STARTUP")
+    led.pulse(0.4,0.4)
+    time.sleep(ACTION_INITIAL_TIMEOUT)
 oled_display()
 led.value = led_resting
 
@@ -197,8 +249,8 @@ while True:
 
     # The button has been recently pressed
     if action_time > 0:
-        time.sleep(0.1)
-        action_time -= 0.1
+        time.sleep(ACTIVE_INTERVAL)
+        action_time -= ACTIVE_INTERVAL
         # Catch if the timer dropped to zero
         if action_time <= 0:
             oled_display()
@@ -221,8 +273,7 @@ while True:
             led.pulse(0.1,0.1)
         else:
             led.value = led_resting
-        # Balance between responsiveness in first button click, and resource consumption
-        time.sleep(0.4)
+        time.sleep(POLLING_INTERVAL)
     
     while button.is_pressed:
         # Record the latest time while pressed & and the first time while pressed 
@@ -246,6 +297,7 @@ while True:
             if MENU[menu_state] == "REBOOT":
                 time.sleep(1)
                 count = REBOOT_COUNTDOWN
+                # Begin countdown
                 while count > 0:
                     oled_display("REBOOTING", count)
                     count -= 1
@@ -253,8 +305,10 @@ while True:
                     if button.is_pressed:
                         action_cancel = True
                         break
+                # Set the correct menu state for the next main loop oled_display
                 if action_cancel:
                     menu_state = 0
+                # Clear the screen, execute reboot, and exit the program
                 else:
                     oled_display()
                     cmd = "sudo reboot now"
@@ -263,6 +317,7 @@ while True:
             if MENU[menu_state] == "SHUTDOWN":
                 time.sleep(1)
                 count = SHUTDOWN_COUNTDOWN
+                # Begin countdown
                 while count > 0:
                     oled_display("SHUTTING_DOWN", count)
                     count -= 1
@@ -270,8 +325,10 @@ while True:
                     if button.is_pressed:
                         action_cancel = True
                         break
+                # Set the correct menu state for the next main loop oled_display
                 if action_cancel:
                     menu_state = 1
+                # Clear the screen, execute shutdown, and exit the program
                 else:
                     oled_display()
                     cmd = "sudo shutdown now"
