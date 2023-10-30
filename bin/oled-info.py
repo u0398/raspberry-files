@@ -307,7 +307,7 @@ while True:
                         break
                 # Set the correct menu state for the next main loop oled_display
                 if action_cancel:
-                    menu_state = 0
+                    menu_state = MENU.index("REBOOT")-1
                 # Clear the screen, execute reboot, and exit the program
                 else:
                     oled_display()
@@ -327,7 +327,7 @@ while True:
                         break
                 # Set the correct menu state for the next main loop oled_display
                 if action_cancel:
-                    menu_state = 1
+                    menu_state = MENU.index("SHUTDOWN")-1
                 # Clear the screen, execute shutdown, and exit the program
                 else:
                     oled_display()
